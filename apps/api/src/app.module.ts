@@ -6,8 +6,10 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './modules/auth/auth.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { CompaniesModule } from './modules/companies/companies.module';
-import { InngestModule } from './inngest/inngest.module';
-import { ApplicationsModule } from './applications/applications.module';
+import { InngestModule } from './modules/inngest/inngest.module';
+import { ApplicationsModule } from './modules/applications/applications.module';
+import { FilesModule } from './modules/files/files.module';
+import { UsersModule } from './modules/users/users.module';
 import { SessionGuard } from './common/guards/session.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -28,8 +30,8 @@ import { RolesGuard } from './common/guards/roles.guard';
     CompaniesModule,
     ApplicationsModule,
     InngestModule,
-    // FilesModule,
-    // UsersModule,
+    FilesModule,
+    UsersModule,
   ],
 
   providers: [
