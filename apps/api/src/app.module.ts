@@ -5,6 +5,9 @@ import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './modules/auth/auth.module';
 import { JobsModule } from './modules/jobs/jobs.module';
+import { CompaniesModule } from './modules/companies/companies.module';
+import { InngestModule } from './inngest/inngest.module';
+import { ApplicationsModule } from './applications/applications.module';
 import { SessionGuard } from './common/guards/session.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -22,8 +25,9 @@ import { RolesGuard } from './common/guards/roles.guard';
 
     AuthModule,
     JobsModule,
-    // CompaniesModule,
-    // ApplicationsModule,
+    CompaniesModule,
+    ApplicationsModule,
+    InngestModule,
     // FilesModule,
     // UsersModule,
   ],
