@@ -4,85 +4,90 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import {
-  db,
-  jobs,
-  companies,
-  type Job,
-  type NewJob,
-} from '@jobboard/db';
-import {
-  eq,
-  and,
-  or,
-  ilike,
-  gte,
-  lte,
-  arrayOverlaps,
-  desc,
-  count,
-  sql,
-} from 'drizzle-orm';
+import { db, jobs, companies, type Job, type NewJob } from '@jobboard/db';
+import { eq, and, ilike, gte, desc, count, sql } from 'drizzle-orm';
+import { CreateJobDto } from './dto/create-job.dto';
+import { UpdateJobDto } from './dto/update-job.dto';
+import { JobFiltersDto } from './dto/job-filters.dto';
 import type { User } from '@jobboard/db';
-import type { CreateJobInput } from './dto/create-job.input';
-import type { UpdateJobInput } from './dto/update-job.input';
-import type { JobsFilterInput } from './dto/jobs-filter.input';
 
 @Injectable()
 export class JobsService {
-  // ── Helpers ─────────────────────────────────────────────────
-
-  /** Generate a URL-safe slug from title + random suffix to avoid collisions */
-  private generateSlug(title: string): string {
+  private generateSlug(title: string, id?: number): string {
     const base = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
-    const suffix = Math.random().toString(36).slice(2, 7);
-    return `${base}-${suffix}`;
+    return id ? `${base}-${id}` : base;
   }
 
-  /** Verify the requesting user owns the company that owns the job */
-  private async assertJobOwnership(jobId: number, userId: string): Promise<Job> {
-    const result = await db
-      .select({ job: jobs, companyOwnerId: companies.ownerId })
+  private async assertOwnership(jobId: number, user: User): Promise<Job> {
+    const job = await db
+      .select()
       .from(jobs)
-      .innerJoin(companies, eq(jobs.companyId, companies.id))
       .where(eq(jobs.id, jobId))
       .limit(1);
 
-    if (!result[0]) throw new NotFoundException(`Job #${jobId} not found`);
+    if (!job[0]) throw new NotFoundException(`Job #${jobId} not found`);
+    if (user.role === 'ADMIN') return job[0];
 
-    if (result[0].companyOwnerId !== userId) {
+    const company = await db
+      .select({ ownerId: companies.ownerId })
+      .from(companies)
+      .where(eq(companies.id, job[0].companyId))
+      .limit(1);
+
+    if (company[0]?.ownerId !== user.id) {
       throw new ForbiddenException('You do not own this job listing');
     }
 
-    return result[0].job;
+    return job[0];
   }
 
-  // ── Public queries ───────────────────────────────────────────
+  /**
+   * Resolve the employer's companyId from their userId.
+   * Called before create() to avoid hardcoded placeholder.
+   */
+  private async resolveCompanyId(userId: string): Promise<number> {
+    const company = await db
+      .select({ id: companies.id })
+      .from(companies)
+      .where(eq(companies.ownerId, userId))
+      .limit(1);
 
-  async findAll(filters: JobsFilterInput): Promise<{ data: Job[]; total: number }> {
-    const { search, workMode, employmentType, location, tags, salaryMin, page, limit } = filters;
+    if (!company[0]) {
+      throw new BadRequestException(
+        'You must create a company profile before posting jobs.',
+      );
+    }
+
+    return company[0].id;
+  }
+
+  // ── Public queries ─────────────────────────────────────────
+
+  async findAll(filters: JobFiltersDto) {
+    const {
+      search, location, workMode, employmentType,
+      tags, salaryMin, page = 1, limit = 20,
+    } = filters;
     const offset = (page - 1) * limit;
 
     const conditions = [
-      // Only active jobs in public listing
       eq(jobs.status, 'ACTIVE'),
-      // Exclude expired jobs (belt + suspenders — cron sets status, but just in case)
-      or(sql`${jobs.expiresAt} IS NULL`, gte(jobs.expiresAt, new Date())),
-      // Optional filters
-      search ? or(ilike(jobs.title, `%${search}%`), ilike(jobs.description, `%${search}%`)) : undefined,
-      workMode ? eq(jobs.workMode, workMode as any) : undefined,
-      employmentType ? eq(jobs.employmentType, employmentType as any) : undefined,
+      search ? ilike(jobs.title, `%${search}%`) : undefined,
       location ? ilike(jobs.location, `%${location}%`) : undefined,
-      tags?.length ? arrayOverlaps(jobs.tags, tags) : undefined,
+      workMode ? eq(jobs.workMode, workMode) : undefined,
+      employmentType ? eq(jobs.employmentType, employmentType) : undefined,
       salaryMin ? gte(jobs.salaryMin, salaryMin) : undefined,
+      tags?.length
+        ? sql`${jobs.tags} @> ARRAY[${sql.join(tags.map((t) => sql`${t}`), sql`, `)}]::varchar[]`
+        : undefined,
     ].filter(Boolean);
 
     const where = and(...(conditions as any[]));
 
-    const [data, [{ total }]] = await Promise.all([
+    const [items, [{ total }]] = await Promise.all([
       db
         .select()
         .from(jobs)
@@ -93,42 +98,27 @@ export class JobsService {
       db.select({ total: count() }).from(jobs).where(where),
     ]);
 
-    return { data, total };
+    return { items, total: Number(total), page, limit, hasMore: offset + items.length < Number(total) };
   }
 
-  async findOne(slug: string): Promise<Job> {
-    const result = await db
+  async findBySlug(slug: string): Promise<Job> {
+    const job = await db
       .select()
       .from(jobs)
       .where(and(eq(jobs.slug, slug), eq(jobs.status, 'ACTIVE')))
       .limit(1);
 
-    if (!result[0]) throw new NotFoundException(`Job not found`);
+    if (!job[0]) throw new NotFoundException(`Job "${slug}" not found`);
 
-    // Fire-and-forget view count increment
-    db.update(jobs)
+    void db
+      .update(jobs)
       .set({ viewCount: sql`${jobs.viewCount} + 1` })
-      .where(eq(jobs.id, result[0].id))
-      .execute()
-      .catch(() => {}); // non-critical
+      .where(eq(jobs.id, job[0].id));
 
-    return result[0];
+    return job[0];
   }
 
-  // ── Employer queries ─────────────────────────────────────────
-
-  async findByCompany(companyId: number, user: User): Promise<Job[]> {
-    // Verify user owns this company
-    const company = await db
-      .select()
-      .from(companies)
-      .where(and(eq(companies.id, companyId), eq(companies.ownerId, user.id)))
-      .limit(1);
-
-    if (!company[0]) {
-      throw new ForbiddenException('Company not found or access denied');
-    }
-
+  async findByCompany(companyId: number): Promise<Job[]> {
     return db
       .select()
       .from(jobs)
@@ -136,99 +126,95 @@ export class JobsService {
       .orderBy(desc(jobs.createdAt));
   }
 
-  // ── Mutations ────────────────────────────────────────────────
-
-  async create(input: CreateJobInput, companyId: number, user: User): Promise<Job> {
-    // Verify user owns the company
-    const company = await db
-      .select()
-      .from(companies)
-      .where(and(eq(companies.id, companyId), eq(companies.ownerId, user.id)))
-      .limit(1);
-
-    if (!company[0]) {
-      throw new ForbiddenException('Company not found or access denied');
-    }
-
-    if (input.salaryMin && input.salaryMax && input.salaryMin > input.salaryMax) {
-      throw new BadRequestException('salaryMin cannot be greater than salaryMax');
-    }
-
-    const newJob: NewJob = {
-      ...input,
-      companyId,
-      slug: this.generateSlug(input.title),
-      status: 'DRAFT',
-      employmentType: (input.employmentType ?? 'FULL_TIME') as any,
-      workMode: (input.workMode ?? 'ONSITE') as any,
-    };
-
-    const result = await db.insert(jobs).values(newJob).returning();
-    return result[0];
+  async findOne(id: number): Promise<Job> {
+    const job = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+    if (!job[0]) throw new NotFoundException(`Job #${id} not found`);
+    return job[0];
   }
 
-  async update(jobId: number, input: UpdateJobInput, user: User): Promise<Job> {
-    await this.assertJobOwnership(jobId, user.id);
+  // ── Mutations ──────────────────────────────────────────────
 
-    if (input.salaryMin && input.salaryMax && input.salaryMin > input.salaryMax) {
+  async create(dto: CreateJobDto, user: User): Promise<Job> {
+    if (dto.salaryMin && dto.salaryMax && dto.salaryMin > dto.salaryMax) {
       throw new BadRequestException('salaryMin cannot be greater than salaryMax');
     }
 
-    const result = await db
-      .update(jobs)
-      .set({ ...input } as any)
-      .where(eq(jobs.id, jobId))
+    // Resolved from DB — no more placeholder
+    const companyId = await this.resolveCompanyId(user.id);
+    const slug = this.generateSlug(dto.title);
+
+    const [job] = await db
+      .insert(jobs)
+      .values({
+        ...dto,
+        companyId,
+        slug,
+        status: 'DRAFT',
+        employmentType: dto.employmentType ?? 'FULL_TIME',
+        workMode: dto.workMode ?? 'ONSITE',
+      } satisfies Omit<NewJob, 'id' | 'createdAt' | 'updatedAt' | 'viewCount' | 'applicationCount' | 'isFeatured'>)
       .returning();
 
-    return result[0];
+    const finalSlug = this.generateSlug(dto.title, job.id);
+    await db.update(jobs).set({ slug: finalSlug }).where(eq(jobs.id, job.id));
+
+    return { ...job, slug: finalSlug };
   }
 
-  async publish(jobId: number, user: User): Promise<Job> {
-    const job = await this.assertJobOwnership(jobId, user.id);
+  async update(id: number, dto: UpdateJobDto, user: User): Promise<Job> {
+    await this.assertOwnership(id, user);
+    const [updated] = await db.update(jobs).set(dto).where(eq(jobs.id, id)).returning();
+    return updated;
+  }
 
-    if (job.status === 'ACTIVE') {
-      throw new BadRequestException('Job is already published');
-    }
+  async publish(id: number, user: User): Promise<Job> {
+    const job = await this.assertOwnership(id, user);
+    if (job.status === 'ACTIVE') throw new BadRequestException('Job is already published');
 
-    // Default expiry: 30 days from now
-    const expiresAt = new Date();
+    const now = new Date();
+    const expiresAt = new Date(now);
     expiresAt.setDate(expiresAt.getDate() + 30);
 
-    const result = await db
+    const [updated] = await db
       .update(jobs)
-      .set({
-        status: 'ACTIVE',
-        publishedAt: new Date(),
-        expiresAt,
-      })
-      .where(eq(jobs.id, jobId))
+      .set({ status: 'ACTIVE', publishedAt: now, expiresAt })
+      .where(eq(jobs.id, id))
       .returning();
 
-    return result[0];
+    return updated;
   }
 
-  async close(jobId: number, user: User, status: 'EXPIRED' | 'FILLED' = 'FILLED'): Promise<Job> {
-    await this.assertJobOwnership(jobId, user.id);
+  async unpublish(id: number, user: User): Promise<Job> {
+    await this.assertOwnership(id, user);
+    const [updated] = await db.update(jobs).set({ status: 'DRAFT' }).where(eq(jobs.id, id)).returning();
+    return updated;
+  }
 
+  async remove(id: number, user: User): Promise<void> {
+    await this.assertOwnership(id, user);
+    await db.delete(jobs).where(eq(jobs.id, id));
+  }
+
+  // ── Inngest / cron helpers ─────────────────────────────────
+
+  async expireStaleJobs(): Promise<number> {
     const result = await db
       .update(jobs)
-      .set({ status })
-      .where(eq(jobs.id, jobId))
-      .returning();
-
-    return result[0];
+      .set({ status: 'EXPIRED' })
+      .where(and(eq(jobs.status, 'ACTIVE'), sql`${jobs.expiresAt} < NOW()`))
+      .returning({ id: jobs.id });
+    return result.length;
   }
 
-  async remove(jobId: number, user: User): Promise<{ success: boolean }> {
-    const job = await this.assertJobOwnership(jobId, user.id);
-
-    if (job.status === 'ACTIVE') {
-      throw new BadRequestException(
-        'Cannot delete an active job. Close it first.',
+  async findExpiringJobs(daysAhead: number): Promise<Job[]> {
+    return db
+      .select()
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.status, 'ACTIVE'),
+          sql`${jobs.expiresAt} BETWEEN NOW() AND NOW() + INTERVAL '${sql.raw(String(daysAhead))} days'`,
+        ),
       );
-    }
-
-    await db.delete(jobs).where(eq(jobs.id, jobId));
-    return { success: true };
   }
 }
