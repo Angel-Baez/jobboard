@@ -1,2 +1,2 @@
-export { inngest } from "./client";
-export * from "./functions";
+export { inngest } from './client';
+export * from './functions';
