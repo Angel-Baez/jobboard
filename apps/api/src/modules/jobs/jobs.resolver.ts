@@ -15,7 +15,10 @@ export class JobsResolver {
 
   @Public()
   @Query(() => PaginatedJobsType, { name: 'jobs' })
-  findAll(@Args('filters', { nullable: true }) filters: JobFiltersDto = {}) {
+  findAll(
+    @Args('filters', { nullable: true })
+    filters: JobFiltersDto = new JobFiltersDto(),
+  ) {
     return this.jobsService.findAll(filters);
   }
 

@@ -1,17 +1,19 @@
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { GraphQLModule } from '@nestjs/graphql';
-import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { APP_GUARD } from '@nestjs/core';
-import { AuthModule } from './modules/auth/auth.module';
-import { JobsModule } from './modules/jobs/jobs.module';
-import { CompaniesModule } from './modules/companies/companies.module';
-import { InngestModule } from './modules/inngest/inngest.module';
-import { ApplicationsModule } from './modules/applications/applications.module';
-import { FilesModule } from './modules/files/files.module';
-import { UsersModule } from './modules/users/users.module';
-import { SessionGuard } from './common/guards/session.guard';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { RolesGuard } from './common/guards/roles.guard';
+import { SessionGuard } from './common/guards/session.guard';
+import { ApplicationsModule } from './modules/applications/applications.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { CompaniesModule } from './modules/companies/companies.module';
+import { FilesModule } from './modules/files/files.module';
+import { HealthModule } from './modules/health/health.module';
+import { InngestModule } from './modules/inngest/inngest.module';
+import { JobsModule } from './modules/jobs/jobs.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -32,6 +34,13 @@ import { RolesGuard } from './common/guards/roles.guard';
     InngestModule,
     FilesModule,
     UsersModule,
+    HealthModule,
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100, // Global limit: 100 requests per minute
+      },
+    ]),
   ],
 
   providers: [
@@ -46,6 +55,10 @@ import { RolesGuard } from './common/guards/roles.guard';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })

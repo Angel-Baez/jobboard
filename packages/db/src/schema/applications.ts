@@ -1,16 +1,16 @@
 import {
-  pgTable,
-  text,
-  integer,
-  timestamp,
-  index,
-  unique,
+    index,
+    integer,
+    pgTable,
+    text,
+    timestamp,
+    unique,
 } from "drizzle-orm/pg-core";
 import { timestamps } from "./_shared";
 import { applicationStatusEnum } from "./enums";
-import { users } from "./users";
-import { jobs } from "./jobs";
 import { files } from "./files";
+import { jobs } from "./jobs";
+import { users } from "./users";
 
 export const applications = pgTable(
   "applications",
@@ -43,6 +43,7 @@ export const applications = pgTable(
     index("applications_job_idx").on(t.jobId),
     index("applications_candidate_idx").on(t.candidateId),
     index("applications_status_idx").on(t.status),
+    index("applications_job_status_idx").on(t.jobId, t.status),
     index("applications_auto_expire_idx").on(t.autoExpireAt),
   ]
 );

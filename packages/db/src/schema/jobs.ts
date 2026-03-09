@@ -1,15 +1,15 @@
 import {
-  pgTable,
-  text,
-  varchar,
-  integer,
-  boolean,
-  timestamp,
-  index,
+    boolean,
+    index,
+    integer,
+    pgTable,
+    text,
+    timestamp,
+    varchar,
 } from "drizzle-orm/pg-core";
 import { timestamps } from "./_shared";
-import { jobStatusEnum, employmentTypeEnum, workModeEnum } from "./enums";
 import { companies } from "./companies";
+import { employmentTypeEnum, jobStatusEnum, workModeEnum } from "./enums";
 
 export const jobs = pgTable(
   "jobs",
@@ -32,7 +32,6 @@ export const jobs = pgTable(
     salaryMin: integer("salary_min"),
     salaryMax: integer("salary_max"),
     salaryCurrency: varchar("salary_currency", { length: 3 }).default("USD"),
-    tags: varchar("tags", { length: 50 }).array(),
     publishedAt: timestamp("published_at", { mode: "date", withTimezone: true }),
     expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }),
     isFeatured: boolean("is_featured").default(false).notNull(),
@@ -48,6 +47,7 @@ export const jobs = pgTable(
     index("jobs_employment_type_idx").on(t.employmentType),
     index("jobs_expires_at_idx").on(t.expiresAt),
     index("jobs_published_at_idx").on(t.publishedAt),
+    index("jobs_company_status_idx").on(t.companyId, t.status),
   ]
 );
 

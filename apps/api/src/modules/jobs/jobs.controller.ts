@@ -1,17 +1,18 @@
 import type { User } from '@jobboard/db';
 import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  ParseIntPipe,
-  Patch,
-  Post,
-  Query,
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    ParseIntPipe,
+    Patch,
+    Post,
+    Query,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -36,6 +37,7 @@ export class JobsController {
     return this.jobsService.findBySlug(slug);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Roles('EMPLOYER')
   @Post()
   create(@Body() dto: CreateJobDto, @CurrentUser() user: User) {
@@ -52,6 +54,7 @@ export class JobsController {
     return this.jobsService.update(id, dto, user);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Roles('EMPLOYER')
   @Post(':id/publish')
   @HttpCode(HttpStatus.OK)
@@ -59,6 +62,7 @@ export class JobsController {
     return this.jobsService.publish(id, user);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Roles('EMPLOYER')
   @Post(':id/unpublish')
   @HttpCode(HttpStatus.OK)

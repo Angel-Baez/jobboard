@@ -1,23 +1,24 @@
+import type { User } from '@jobboard/db';
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
-  Body,
-  Query,
-  ParseIntPipe,
-  HttpCode,
-  HttpStatus,
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    ParseIntPipe,
+    Patch,
+    Post,
+    Query,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { ApplicationsService } from './applications.service';
+import { ApplicationFiltersDto } from './dto/application-filters.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
-import { ApplicationFiltersDto } from './dto/application-filters.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import type { User } from '@jobboard/db';
 
 @Controller('applications')
 export class ApplicationsController {
@@ -36,6 +37,7 @@ export class ApplicationsController {
   }
 
   /** POST /applications — submit application */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Roles('CANDIDATE')
   @Post()
   apply(@Body() dto: CreateApplicationDto, @CurrentUser() user: User) {
@@ -43,6 +45,7 @@ export class ApplicationsController {
   }
 
   /** DELETE /applications/:id — withdraw application */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Roles('CANDIDATE')
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)

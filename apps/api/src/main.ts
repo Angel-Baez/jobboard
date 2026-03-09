@@ -1,13 +1,19 @@
-import 'dotenv/config';
+import { HttpStatus, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
+import 'dotenv/config';
+import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.use(cookieParser());
+
+  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   app.enableCors({
     origin: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
@@ -19,6 +25,7 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      errorHttpStatusCode: HttpStatus.BAD_REQUEST,
     }),
   );
 

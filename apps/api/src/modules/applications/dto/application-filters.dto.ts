@@ -1,30 +1,11 @@
-import { IsOptional, IsEnum, IsInt, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
-import { InputType, Field, Int } from '@nestjs/graphql';
-
-const APPLICATION_STATUSES = [
-  'PENDING', 'REVIEWING', 'SHORTLISTED', 'REJECTED', 'HIRED',
-] as const;
+import { Field, InputType } from '@nestjs/graphql';
+import { IsEnum, IsOptional } from 'class-validator';
+import { PaginationDto } from '../../../common/dto/pagination.dto';
 
 @InputType()
-export class ApplicationFiltersDto {
+export class ApplicationFiltersDto extends PaginationDto {
   @Field(() => String, { nullable: true })
-  @IsEnum(APPLICATION_STATUSES)
+  @IsEnum(['PENDING', 'REVIEWING', 'SHORTLISTED', 'REJECTED', 'HIRED'])
   @IsOptional()
-  status?: (typeof APPLICATION_STATUSES)[number];
-
-  @Field(() => Int, { defaultValue: 1 })
-  @IsInt()
-  @Min(1)
-  @IsOptional()
-  @Type(() => Number)
-  page?: number = 1;
-
-  @Field(() => Int, { defaultValue: 20 })
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  @IsOptional()
-  @Type(() => Number)
-  limit?: number = 20;
+  status?: string;
 }
