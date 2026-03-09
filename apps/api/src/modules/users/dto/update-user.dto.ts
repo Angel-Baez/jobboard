@@ -33,7 +33,7 @@ export class UpdateUserDto {
 
 @InputType()
 export class SwitchRoleDto {
-  @Field()
+  @Field(() => String)
   @IsEnum(SWITCHABLE_ROLES)
   role!: (typeof SWITCHABLE_ROLES)[number];
 }

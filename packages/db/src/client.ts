@@ -1,11 +1,14 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import * as schema from "./schema";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import * as schema from "./schema/index";
 
-const connectionString = process.env.DATABASE_URL!;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL!,
+  // Pool config — ajustar según el entorno
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
 
-// Disable prefetch for serverless environments
-const client = postgres(connectionString, { prepare: false });
-
-export const db = drizzle(client, { schema });
+export const db = drizzle(pool, { schema });
 export type DB = typeof db;

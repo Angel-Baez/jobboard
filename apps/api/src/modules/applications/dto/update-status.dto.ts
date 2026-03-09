@@ -7,7 +7,7 @@ const APPLICATION_STATUSES = [
 
 @InputType()
 export class UpdateStatusDto {
-  @Field()
+  @Field(() => String)
   @IsEnum(APPLICATION_STATUSES)
   status!: (typeof APPLICATION_STATUSES)[number];
 
