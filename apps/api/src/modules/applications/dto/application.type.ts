@@ -3,53 +3,53 @@ import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 @ObjectType()
 export class ApplicationType {
   @Field(() => ID)
-  id: number;
+  id!: number;
 
   @Field(() => Int)
-  jobId: number;
+  jobId!: number;
 
   @Field()
-  candidateId: string;
+  candidateId!: string;
 
   @Field(() => Int, { nullable: true })
-  resumeFileId: number | null;
+  resumeFileId!: number | null;
 
   @Field()
-  status: string;
+  status!: string;
 
   @Field(() => String, { nullable: true })
-  coverLetter: string | null;
+  coverLetter!: string | null;
 
   @Field(() => String, { nullable: true })
-  employerNotes: string | null;
+  employerNotes!: string | null;
 
   @Field(() => Date, { nullable: true })
-  statusChangedAt: Date | null;
+  statusChangedAt!: Date | null;
 
   @Field(() => Date, { nullable: true })
-  autoExpireAt: Date | null;
+  autoExpireAt!: Date | null;
 
   @Field()
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field()
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 @ObjectType()
 export class PaginatedApplicationsType {
   @Field(() => [ApplicationType])
-  items: ApplicationType[];
+  items!: ApplicationType[];
 
   @Field(() => Int)
-  total: number;
+  total!: number;
 
   @Field(() => Int)
-  page: number;
+  page!: number;
 
   @Field(() => Int)
-  limit: number;
+  limit!: number;
 
   @Field()
-  hasMore: boolean;
+  hasMore!: boolean;
 }

@@ -20,12 +20,12 @@ export class CreateJobDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  title: string;
+  title!: string;
 
   @Field()
   @IsString()
   @IsNotEmpty()
-  description: string;
+  description!: string;
 
   @Field(() => String, { nullable: true })
   @IsString()

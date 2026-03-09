@@ -3,41 +3,41 @@ import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 @ObjectType()
 export class CompanyType {
   @Field(() => ID)
-  id: number;
+  id!: number;
 
   @Field()
-  ownerId: string;
+  ownerId!: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  slug: string;
+  slug!: string;
 
   @Field(() => String, { nullable: true })
-  description: string | null;
+  description!: string | null;
 
   @Field(() => String, { nullable: true })
-  website: string | null;
+  website!: string | null;
 
   @Field(() => String, { nullable: true })
-  location: string | null;
+  location!: string | null;
 
   @Field(() => String, { nullable: true })
-  size: string | null;
+  size!: string | null;
 
   @Field(() => String, { nullable: true })
-  industry: string | null;
+  industry!: string | null;
 
   @Field(() => Int, { nullable: true })
-  logoFileId: number | null;
+  logoFileId!: number | null;
 
   @Field()
-  isVerified: boolean;
+  isVerified!: boolean;
 
   @Field()
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field()
-  updatedAt: Date;
+  updatedAt!: Date;
 }

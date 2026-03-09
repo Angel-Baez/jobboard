@@ -6,7 +6,7 @@ export class CreateApplicationDto {
   @Field(() => Int)
   @IsInt()
   @Min(1)
-  jobId: number;
+  jobId!: number;
 
   @Field(() => String, { nullable: true })
   @IsString()

@@ -15,24 +15,24 @@ const MIME_TYPES = [
 export class ConfirmUploadDto {
   @IsString()
   @IsNotEmpty()
-  storageKey: string;
+  storageKey!: string;
 
   @IsString()
   @IsNotEmpty()
-  publicUrl: string;
+  publicUrl!: string;
 
   @IsEnum(FILE_TYPES)
-  fileType: (typeof FILE_TYPES)[number];
+  fileType!: (typeof FILE_TYPES)[number];
 
   @IsEnum(MIME_TYPES)
-  mimeType: (typeof MIME_TYPES)[number];
+  mimeType!: (typeof MIME_TYPES)[number];
 
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  originalName: string;
+  originalName!: string;
 
   @IsInt()
   @Min(1)
-  sizeBytes: number;
+  sizeBytes!: number;
 }

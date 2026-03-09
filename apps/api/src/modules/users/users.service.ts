@@ -22,7 +22,6 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserDto, requestingUser: User): Promise<User> {
-    // Users can only update their own profile (admins can update anyone)
     if (requestingUser.role !== 'ADMIN' && requestingUser.id !== id) {
       throw new ForbiddenException('You can only update your own profile');
     }
@@ -37,12 +36,6 @@ export class UsersService {
     return updated;
   }
 
-  /**
-   * Onboarding: let a user switch between CANDIDATE and EMPLOYER.
-   * Guards:
-   *  - ADMIN role cannot be self-assigned
-   *  - Employers with active jobs cannot switch back to CANDIDATE
-   */
   async switchRole(id: string, dto: SwitchRoleDto, requestingUser: User): Promise<User> {
     if (requestingUser.id !== id && requestingUser.role !== 'ADMIN') {
       throw new ForbiddenException('You can only change your own role');
@@ -54,7 +47,6 @@ export class UsersService {
       throw new BadRequestException(`User is already a ${dto.role}`);
     }
 
-    // Prevent employers from switching to CANDIDATE if they have active jobs
     if (user.role === 'EMPLOYER' && dto.role === 'CANDIDATE') {
       const company = await db
         .select({ id: companies.id })
@@ -78,10 +70,6 @@ export class UsersService {
     return updated;
   }
 
-  /**
-   * Soft-deactivate: disables login without deleting data.
-   * Admin only.
-   */
   async deactivate(id: string): Promise<User> {
     const [updated] = await db
       .update(users)
@@ -104,22 +92,23 @@ export class UsersService {
     return updated;
   }
 
-  /** Stats for the admin dashboard */
   async getStats() {
-    const [total, candidates, employers, admins, applications: appCount] = await Promise.all([
-      db.select({ c: count() }).from(users),
-      db.select({ c: count() }).from(users).where(eq(users.role, 'CANDIDATE')),
-      db.select({ c: count() }).from(users).where(eq(users.role, 'EMPLOYER')),
-      db.select({ c: count() }).from(users).where(eq(users.role, 'ADMIN')),
-      db.select({ c: count() }).from(applications),
-    ]);
+    // Renamed destructured variable to avoid clash with 'applications' table import
+    const [totalRes, candidatesRes, employersRes, adminsRes, appsRes] =
+      await Promise.all([
+        db.select({ c: count() }).from(users),
+        db.select({ c: count() }).from(users).where(eq(users.role, 'CANDIDATE')),
+        db.select({ c: count() }).from(users).where(eq(users.role, 'EMPLOYER')),
+        db.select({ c: count() }).from(users).where(eq(users.role, 'ADMIN')),
+        db.select({ c: count() }).from(applications),
+      ]);
 
     return {
-      totalUsers: Number(total[0].c),
-      candidates: Number(candidates[0].c),
-      employers: Number(employers[0].c),
-      admins: Number(admins[0].c),
-      totalApplications: Number(appCount[0].c),
+      totalUsers: Number(totalRes[0].c),
+      candidates: Number(candidatesRes[0].c),
+      employers: Number(employersRes[0].c),
+      admins: Number(adminsRes[0].c),
+      totalApplications: Number(appsRes[0].c),
     };
   }
 }

@@ -1,75 +1,80 @@
-import { Field, InputType, Int } from '@nestjs/graphql';
 import {
   IsString,
+  IsNotEmpty,
   IsOptional,
   IsEnum,
   IsInt,
   IsArray,
   MaxLength,
-  MinLength,
   Min,
   ArrayMaxSize,
 } from 'class-validator';
+import { InputType, Field, Int } from '@nestjs/graphql';
+
+const EmploymentType = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP'] as const;
+const WorkMode = ['REMOTE', 'ONSITE', 'HYBRID'] as const;
 
 @InputType()
-export class CreateJobInput {
+export class CreateJobDto {
   @Field()
   @IsString()
-  @MinLength(5)
+  @IsNotEmpty()
   @MaxLength(255)
-  title: string;
+  title!: string;
 
   @Field()
   @IsString()
-  @MinLength(50)
-  description: string;
+  @IsNotEmpty()
+  description!: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional()
   @IsString()
+  @IsOptional()
   requirements?: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional()
   @IsString()
+  @IsOptional()
   benefits?: string;
 
   @Field(() => String, { nullable: true })
-  @IsOptional()
   @IsString()
+  @IsOptional()
   @MaxLength(255)
   location?: string;
 
   @Field(() => String, { defaultValue: 'FULL_TIME' })
-  @IsEnum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP'])
-  employmentType: string;
+  @IsEnum(EmploymentType)
+  @IsOptional()
+  employmentType?: (typeof EmploymentType)[number];
 
   @Field(() => String, { defaultValue: 'ONSITE' })
-  @IsEnum(['REMOTE', 'ONSITE', 'HYBRID'])
-  workMode: string;
+  @IsEnum(WorkMode)
+  @IsOptional()
+  workMode?: (typeof WorkMode)[number];
 
   @Field(() => Int, { nullable: true })
-  @IsOptional()
   @IsInt()
   @Min(0)
+  @IsOptional()
   salaryMin?: number;
 
   @Field(() => Int, { nullable: true })
-  @IsOptional()
   @IsInt()
   @Min(0)
+  @IsOptional()
   salaryMax?: number;
 
-  @Field(() => String, { nullable: true, defaultValue: 'USD' })
-  @IsOptional()
+  @Field(() => String, { nullable: true })
   @IsString()
+  @IsOptional()
   @MaxLength(3)
   salaryCurrency?: string;
 
   @Field(() => [String], { nullable: true })
-  @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @ArrayMaxSize(10)
+  @ArrayMaxSize(15)
+  @IsOptional()
   tags?: string[];
 }

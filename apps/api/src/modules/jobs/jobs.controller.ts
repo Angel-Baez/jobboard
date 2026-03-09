@@ -1,77 +1,75 @@
+import type { User } from '@jobboard/db';
 import {
-  Controller,
-  Post,
-  Put,
-  Patch,
-  Delete,
   Body,
-  Param,
-  ParseIntPipe,
+  Controller,
+  Delete,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
 } from '@nestjs/common';
-import { JobsService } from './jobs.service';
-import { CreateJobInput } from './dto/create-job.input';
-import { UpdateJobInput } from './dto/update-job.input';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
-import type { User } from '@jobboard/db';
+import { CreateJobDto } from './dto/create-job.dto';
+import { JobFiltersDto } from './dto/job-filters.dto';
+import { UpdateJobDto } from './dto/update-job.dto';
+import { JobsService } from './jobs.service';
 
-/**
- * REST endpoints for employer job management.
- * All routes require EMPLOYER role (enforced by RolesGuard via @Roles).
- *
- * POST   /jobs                     → create (DRAFT)
- * PUT    /jobs/:id                 → update
- * PATCH  /jobs/:id/publish         → DRAFT → ACTIVE
- * PATCH  /jobs/:id/close           → ACTIVE → FILLED
- * DELETE /jobs/:id                 → delete (only DRAFT/EXPIRED)
- */
 @Controller('jobs')
-@Roles('EMPLOYER')
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
-  @Post()
-  @HttpCode(HttpStatus.CREATED)
-  create(
-    @Body() body: { input: CreateJobInput; companyId: number },
-    @CurrentUser() user: User,
-  ) {
-    return this.jobsService.create(body.input, body.companyId, user);
+  @Public()
+  @Get()
+  findAll(@Query() filters: JobFiltersDto) {
+    return this.jobsService.findAll(filters);
   }
 
-  @Put(':id')
+  @Public()
+  @Get(':slug')
+  findBySlug(@Param('slug') slug: string) {
+    return this.jobsService.findBySlug(slug);
+  }
+
+  @Roles('EMPLOYER')
+  @Post()
+  create(@Body() dto: CreateJobDto, @CurrentUser() user: User) {
+    return this.jobsService.create(dto, user);
+  }
+
+  @Roles('EMPLOYER')
+  @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() input: UpdateJobInput,
+    @Body() dto: UpdateJobDto,
     @CurrentUser() user: User,
   ) {
-    return this.jobsService.update(id, input, user);
+    return this.jobsService.update(id, dto, user);
   }
 
-  @Patch(':id/publish')
-  publish(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: User,
-  ) {
+  @Roles('EMPLOYER')
+  @Post(':id/publish')
+  @HttpCode(HttpStatus.OK)
+  publish(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: User) {
     return this.jobsService.publish(id, user);
   }
 
-  @Patch(':id/close')
-  close(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: User,
-  ) {
-    return this.jobsService.close(id, user, 'FILLED');
+  @Roles('EMPLOYER')
+  @Post(':id/unpublish')
+  @HttpCode(HttpStatus.OK)
+  unpublish(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: User) {
+    return this.jobsService.unpublish(id, user);
   }
 
+  @Roles('EMPLOYER')
   @Delete(':id')
-  @HttpCode(HttpStatus.OK)
-  remove(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: User,
-  ) {
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: User) {
     return this.jobsService.remove(id, user);
   }
 }

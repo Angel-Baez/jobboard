@@ -9,7 +9,7 @@ const APPLICATION_STATUSES = [
 export class UpdateStatusDto {
   @Field()
   @IsEnum(APPLICATION_STATUSES)
-  status: (typeof APPLICATION_STATUSES)[number];
+  status!: (typeof APPLICATION_STATUSES)[number];
 
   @Field(() => String, { nullable: true })
   @IsString()

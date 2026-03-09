@@ -38,6 +38,9 @@ importers:
       '@jobboard/inngest':
         specifier: workspace:*
         version: link:../../packages/inngest
+      '@jobboard/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@jobboard/types':
         specifier: workspace:*
         version: link:../../packages/types

@@ -3,36 +3,36 @@ import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 @ObjectType()
 export class FileType {
   @Field(() => ID)
-  id: number;
+  id!: number;
 
   @Field()
-  type: string;
+  type!: string;
 
   @Field()
-  url: string;
+  url!: string;
 
   @Field()
-  originalName: string;
+  originalName!: string;
 
   @Field()
-  mimeType: string;
+  mimeType!: string;
 
   @Field(() => Int)
-  sizeBytes: number;
+  sizeBytes!: number;
 
   @Field()
-  createdAt: Date;
+  createdAt!: Date;
 }
 
 /** Returned by presign endpoint — not stored in DB yet */
 @ObjectType()
 export class PresignedUploadType {
   @Field()
-  uploadUrl: string;
+  uploadUrl!: string;
 
   @Field()
-  storageKey: string;
+  storageKey!: string;
 
   @Field()
-  publicUrl: string;
+  publicUrl!: string;
 }

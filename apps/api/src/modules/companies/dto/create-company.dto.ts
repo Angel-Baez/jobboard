@@ -16,7 +16,7 @@ export class CreateCompanyDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  name: string;
+  name!: string;
 
   @Field(() => String, { nullable: true })
   @IsString()
