@@ -1,15 +1,23 @@
+import type { User } from '@jobboard/db';
 import {
+  companies,
+  db,
+  jobs,
+  jobTags,
+  tags,
+  type Job,
+  type NewJob
+} from '@jobboard/db';
+import {
+  BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  ForbiddenException,
-  BadRequestException,
 } from '@nestjs/common';
-import { db, jobs, companies, type Job, type NewJob } from '@jobboard/db';
-import { eq, and, ilike, gte, desc, count, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, inArray, sql } from 'drizzle-orm';
 import { CreateJobDto } from './dto/create-job.dto';
-import { UpdateJobDto } from './dto/update-job.dto';
 import { JobFiltersDto } from './dto/job-filters.dto';
-import type { User } from '@jobboard/db';
+import { UpdateJobDto } from './dto/update-job.dto';
 
 @Injectable()
 export class JobsService {
@@ -68,37 +76,56 @@ export class JobsService {
 
   async findAll(filters: JobFiltersDto) {
     const {
-      search, location, workMode, employmentType,
-      tags, salaryMin, page = 1, limit = 20,
+      search,
+      location,
+      workMode,
+      employmentType,
+      tags: filterTags,
+      salaryMin,
+      page = 1,
+      limit = 20,
+      offset,
     } = filters;
-    const offset = (page - 1) * limit;
 
     const conditions = [
       eq(jobs.status, 'ACTIVE'),
       search ? ilike(jobs.title, `%${search}%`) : undefined,
       location ? ilike(jobs.location, `%${location}%`) : undefined,
-      workMode ? eq(jobs.workMode, workMode) : undefined,
-      employmentType ? eq(jobs.employmentType, employmentType) : undefined,
+      workMode ? eq(jobs.workMode, workMode as any) : undefined,
+      employmentType ? eq(jobs.employmentType, employmentType as any) : undefined,
       salaryMin ? gte(jobs.salaryMin, salaryMin) : undefined,
-      tags?.length
-        ? sql`${jobs.tags} @> ARRAY[${sql.join(tags.map((t) => sql`${t}`), sql`, `)}]::varchar[]`
-        : undefined,
     ].filter(Boolean);
+
+    // If tags are provided, filter jobs that have ALL requested tags
+    if (filterTags?.length) {
+      conditions.push(
+        inArray(
+          jobs.id,
+          db
+            .select({ jobId: jobTags.jobId })
+            .from(jobTags)
+            .innerJoin(tags, eq(jobTags.tagId, tags.id))
+            .where(inArray(tags.name, filterTags))
+            .groupBy(jobTags.jobId)
+            .having(sql`count(${jobTags.tagId}) = ${filterTags.length}`),
+        ),
+      );
+    }
 
     const where = and(...(conditions as any[]));
 
     const [items, [{ total }]] = await Promise.all([
-      db
-        .select()
-        .from(jobs)
-        .where(where)
-        .orderBy(desc(jobs.isFeatured), desc(jobs.publishedAt))
-        .limit(limit)
-        .offset(offset),
+      db.select().from(jobs).where(where).orderBy(desc(jobs.createdAt)).limit(limit).offset(offset),
       db.select({ total: count() }).from(jobs).where(where),
     ]);
 
-    return { items, total: Number(total), page, limit, hasMore: offset + items.length < Number(total) };
+    return {
+      items,
+      total: Number(total),
+      page,
+      limit,
+      hasMore: offset + items.length < Number(total),
+    };
   }
 
   async findBySlug(slug: string): Promise<Job> {
@@ -135,40 +162,107 @@ export class JobsService {
   // ── Mutations ──────────────────────────────────────────────
 
   async create(dto: CreateJobDto, user: User): Promise<Job> {
-    if (dto.salaryMin && dto.salaryMax && dto.salaryMin > dto.salaryMax) {
-      throw new BadRequestException('salaryMin cannot be greater than salaryMax');
-    }
-
     // Resolved from DB — no more placeholder
     const companyId = await this.resolveCompanyId(user.id);
     const slug = this.generateSlug(dto.title);
 
+    const { tags: jobTagsList, ...rest } = dto;
     const [job] = await db
       .insert(jobs)
       .values({
-        ...dto,
+        ...rest,
         companyId,
         slug,
         status: 'DRAFT',
         employmentType: dto.employmentType ?? 'FULL_TIME',
         workMode: dto.workMode ?? 'ONSITE',
-      } satisfies Omit<NewJob, 'id' | 'createdAt' | 'updatedAt' | 'viewCount' | 'applicationCount' | 'isFeatured'>)
+      } satisfies Omit<NewJob, 'id' | 'createdAt' | 'updatedAt' | 'publishedAt' | 'expiresAt' | 'applicationCount'>)
       .returning();
 
     const finalSlug = this.generateSlug(dto.title, job.id);
     await db.update(jobs).set({ slug: finalSlug }).where(eq(jobs.id, job.id));
 
+    // Normalized tags handling
+    if (jobTagsList && jobTagsList.length > 0) {
+      for (const tagName of jobTagsList) {
+        // Upsert tag
+        const [tag] = await db
+          .insert(tags)
+          .values({ name: tagName, usageCount: 1 })
+          .onConflictDoUpdate({
+            target: tags.name,
+            set: { usageCount: sql`${tags.usageCount} + 1` },
+          })
+          .returning();
+
+        // Link job to tag
+        await db.insert(jobTags).values({
+          jobId: job.id,
+          tagId: tag.id,
+        });
+      }
+    }
+
+    // Update company jobsCount
+    await db
+      .update(companies)
+      .set({ jobsCount: sql`${companies.jobsCount} + 1` })
+      .where(eq(companies.id, companyId));
+
     return { ...job, slug: finalSlug };
   }
 
   async update(id: number, dto: UpdateJobDto, user: User): Promise<Job> {
-    await this.assertOwnership(id, user);
-    const [updated] = await db.update(jobs).set(dto).where(eq(jobs.id, id)).returning();
+    const { tags: jobTagsList, ...rest } = dto;
+    const [updated] = await db
+      .update(jobs)
+      .set(rest)
+      .where(
+        and(
+          eq(jobs.id, id),
+          user.role !== 'ADMIN'
+            ? sql`${jobs.companyId} IN (SELECT ${companies.id} FROM ${companies} WHERE ${companies.ownerId} = ${user.id})`
+            : sql`TRUE`,
+        ),
+      )
+      .returning();
+
+    if (!updated) {
+      throw new ForbiddenException('You do not own this job or it does not exist');
+    }
+
+    // Normalized tags update
+    if (jobTagsList) {
+      // Clear old tags
+      await db.delete(jobTags).where(eq(jobTags.jobId, id));
+
+      if (jobTagsList.length > 0) {
+        for (const tagName of jobTagsList) {
+          // Upsert tag
+          const [tag] = await db
+            .insert(tags)
+            .values({ name: tagName, usageCount: 1 })
+            .onConflictDoUpdate({
+              target: tags.name,
+              set: { usageCount: sql`${tags.usageCount} + 1` },
+            })
+            .returning();
+
+          await db.insert(jobTags).values({
+            jobId: id,
+            tagId: tag.id,
+          });
+        }
+      }
+    }
+
     return updated;
   }
 
   async publish(id: number, user: User): Promise<Job> {
-    const job = await this.assertOwnership(id, user);
+    await this.assertOwnership(id, user);
+    // ... existing publish logic remains valid as it uses assertOwnership first
+    const job = await this.findOne(id);
     if (job.status === 'ACTIVE') throw new BadRequestException('Job is already published');
 
     const now = new Date();
@@ -185,14 +279,47 @@ export class JobsService {
   }
 
   async unpublish(id: number, user: User): Promise<Job> {
-    await this.assertOwnership(id, user);
-    const [updated] = await db.update(jobs).set({ status: 'DRAFT' }).where(eq(jobs.id, id)).returning();
+    const [updated] = await db
+      .update(jobs)
+      .set({ status: 'DRAFT' })
+      .where(
+        and(
+          eq(jobs.id, id),
+          user.role !== 'ADMIN'
+            ? sql`${jobs.companyId} IN (SELECT ${companies.id} FROM ${companies} WHERE ${companies.ownerId} = ${user.id})`
+            : undefined,
+        ),
+      )
+      .returning();
+
+    if (!updated) {
+      throw new ForbiddenException('You do not own this job or it does not exist');
+    }
     return updated;
   }
 
   async remove(id: number, user: User): Promise<void> {
-    await this.assertOwnership(id, user);
-    await db.delete(jobs).where(eq(jobs.id, id));
+    const [deleted] = await db
+      .delete(jobs)
+      .where(
+        and(
+          eq(jobs.id, id),
+          user.role !== 'ADMIN'
+            ? sql`${jobs.companyId} IN (SELECT ${companies.id} FROM ${companies} WHERE ${companies.ownerId} = ${user.id})`
+            : undefined,
+        ),
+      )
+      .returning();
+
+    if (!deleted) {
+      throw new ForbiddenException('You do not own this job or it does not exist');
+    }
+
+    // Decrement company jobsCount
+    await db
+      .update(companies)
+      .set({ jobsCount: sql`${companies.jobsCount} - 1` })
+      .where(eq(companies.id, deleted.companyId));
   }
 
   // ── Inngest / cron helpers ─────────────────────────────────

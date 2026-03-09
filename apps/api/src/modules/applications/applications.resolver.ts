@@ -1,12 +1,12 @@
-import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
+import type { User } from '@jobboard/db';
+import { Args, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { ApplicationsService } from './applications.service';
+import { ApplicationFiltersDto } from './dto/application-filters.dto';
 import { ApplicationType, PaginatedApplicationsType } from './dto/application.type';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
-import { ApplicationFiltersDto } from './dto/application-filters.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import type { User } from '@jobboard/db';
 
 @Resolver(() => ApplicationType)
 export class ApplicationsResolver {
@@ -20,7 +20,8 @@ export class ApplicationsResolver {
   @Roles('CANDIDATE')
   @Query(() => PaginatedApplicationsType, { name: 'myApplications' })
   findMine(
-    @Args('filters', { nullable: true }) filters: ApplicationFiltersDto = {},
+    @Args('filters', { nullable: true })
+    filters: ApplicationFiltersDto = new ApplicationFiltersDto(),
     @CurrentUser() user: User,
   ) {
     return this.applicationsService.findByCandidate(user.id, filters);
@@ -35,7 +36,8 @@ export class ApplicationsResolver {
   @Query(() => PaginatedApplicationsType, { name: 'jobApplications' })
   findByJob(
     @Args('jobId', { type: () => Int }) jobId: number,
-    @Args('filters', { nullable: true }) filters: ApplicationFiltersDto = {},
+    @Args('filters', { nullable: true })
+    filters: ApplicationFiltersDto = new ApplicationFiltersDto(),
     @CurrentUser() user: User,
   ) {
     return this.applicationsService.findByJob(jobId, filters, user);

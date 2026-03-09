@@ -5,11 +5,13 @@ export * from "./enums";
 export * from "./_shared";
 
 // 3. Tables — ordered by dependency (no circular imports)
-export * from "./users";       // no table deps
-export * from "./companies";   // → users
-export * from "./files";       // → users
-export * from "./jobs";        // → companies
+export * from "./application-events";
 export * from "./applications"; // → users, jobs, files
+export * from "./companies"; // → users
+export * from "./files"; // → users
+export * from "./jobs"; // → companies
+export * from "./tags";
+export * from "./users"; // no table deps
 
 // 4. Relations — imported last, sees all tables
 export * from "./relations";

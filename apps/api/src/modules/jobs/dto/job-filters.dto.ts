@@ -1,12 +1,13 @@
-import { IsOptional, IsString, IsEnum, IsInt, Min, Max } from 'class-validator';
+import { Field, InputType, Int } from '@nestjs/graphql';
 import { Type } from 'class-transformer';
-import { InputType, Field, Int } from '@nestjs/graphql';
+import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { PaginationDto } from '../../../common/dto/pagination.dto';
 
 const WorkMode = ['REMOTE', 'ONSITE', 'HYBRID'] as const;
 const EmploymentType = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP'] as const;
 
 @InputType()
-export class JobFiltersDto {
+export class JobFiltersDto extends PaginationDto {
   @Field(() => String, { nullable: true })
   @IsString()
   @IsOptional()
@@ -38,20 +39,4 @@ export class JobFiltersDto {
   @IsOptional()
   @Type(() => Number)
   salaryMin?: number;
-
-  // Pagination
-  @Field(() => Int, { defaultValue: 1 })
-  @IsInt()
-  @Min(1)
-  @IsOptional()
-  @Type(() => Number)
-  page?: number = 1;
-
-  @Field(() => Int, { defaultValue: 20 })
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  @IsOptional()
-  @Type(() => Number)
-  limit?: number = 20;
 }

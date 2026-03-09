@@ -1,10 +1,10 @@
 import {
-  pgTable,
-  text,
-  varchar,
-  integer,
-  boolean,
-  index,
+    boolean,
+    index,
+    integer,
+    pgTable,
+    text,
+    varchar,
 } from "drizzle-orm/pg-core";
 import { timestamps } from "./_shared";
 import { users } from "./users";
@@ -25,6 +25,7 @@ export const companies = pgTable(
     industry: varchar("industry", { length: 100 }),
     logoFileId: integer("logo_file_id"),
     isVerified: boolean("is_verified").default(false).notNull(),
+    jobsCount: integer("jobs_count").default(0).notNull(),
     ...timestamps,
   },
   (t) => [

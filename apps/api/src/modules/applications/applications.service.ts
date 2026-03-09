@@ -1,25 +1,26 @@
+import type { User } from '@jobboard/db';
 import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-  ConflictException,
-  BadRequestException,
-} from '@nestjs/common';
-import {
-  db,
-  applications,
-  jobs,
-  companies,
-  users,
-  type Application,
-  type NewApplication,
+    applications,
+    applicationStatusHistory,
+    companies,
+    db,
+    jobs,
+    users,
+    type Application,
+    type NewApplication
 } from '@jobboard/db';
-import { eq, and, count, desc } from 'drizzle-orm';
 import { inngest } from '@jobboard/inngest';
+import {
+    BadRequestException,
+    ConflictException,
+    ForbiddenException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
+import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { ApplicationFiltersDto } from './dto/application-filters.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
-import { ApplicationFiltersDto } from './dto/application-filters.dto';
-import type { User } from '@jobboard/db';
 
 // Valid status transitions — employer can't jump from PENDING to HIRED
 const STATUS_TRANSITIONS: Record<string, string[]> = {
@@ -78,6 +79,15 @@ export class ApplicationsService {
         autoExpireAt,
       } satisfies Omit<NewApplication, 'id' | 'createdAt' | 'updatedAt' | 'statusChangedAt' | 'employerNotes'>)
       .returning();
+
+    // Record initial status event
+    await db.insert(applicationStatusHistory).values({
+      applicationId: application.id,
+      fromStatus: null,
+      toStatus: 'PENDING',
+      changedBy: candidate.id,
+      reason: 'Initial application submission',
+    });
 
     // Increment denormalized counter on job
     await db
@@ -153,6 +163,15 @@ export class ApplicationsService {
       .where(eq(applications.id, applicationId))
       .returning();
 
+    // Record status history event
+    await db.insert(applicationStatusHistory).values({
+      applicationId,
+      fromStatus: application.status,
+      toStatus: dto.status,
+      changedBy: employer.id,
+      reason: dto.reason,
+    });
+
     // Fetch candidate info for notification
     const [candidate] = await db
       .select({ email: users.email, name: users.name })
@@ -200,6 +219,20 @@ export class ApplicationsService {
       .update(applications)
       .set({ status: 'REJECTED', statusChangedAt: new Date() })
       .where(eq(applications.id, applicationId));
+
+    // Record auto-expire event
+    // Note: Since changedBy is a FK to users.id, we might need a system user or use the employer ID if available. 
+    // For now, using null is not allowed. I will use the job owner ID as a fallback if possible.
+    const [job] = await db.select({ companyId: jobs.companyId }).from(jobs).where(eq(jobs.id, application[0].jobId));
+    const [company] = await db.select({ ownerId: companies.ownerId }).from(companies).where(eq(companies.id, job.companyId));
+
+    await db.insert(applicationStatusHistory).values({
+      applicationId,
+      fromStatus: 'PENDING',
+      toStatus: 'REJECTED',
+      changedBy: company.ownerId, // Attribution to company owner for system-automated rejection
+      reason: 'Automatically expired after 30 days',
+    });
   }
 
   // ── Queries ────────────────────────────────────────────────
@@ -209,12 +242,11 @@ export class ApplicationsService {
     candidateId: string,
     filters: ApplicationFiltersDto,
   ) {
-    const { status, page = 1, limit = 20 } = filters;
-    const offset = (page - 1) * limit;
+    const { status, page = 1, limit = 20, offset } = filters;
 
     const where = and(
       eq(applications.candidateId, candidateId),
-      status ? eq(applications.status, status) : undefined,
+      status ? eq(applications.status, status as any) : undefined,
     );
 
     const [items, [{ total }]] = await Promise.all([
@@ -231,7 +263,7 @@ export class ApplicationsService {
     return { items, total: Number(total), page, limit, hasMore: offset + items.length < Number(total) };
   }
 
-  /** Employer: all applications for a specific job */
+  /** Employer: all applications for a specific job with basic ranking */
   async findByJob(
     jobId: number,
     filters: ApplicationFiltersDto,
@@ -245,21 +277,39 @@ export class ApplicationsService {
 
     const where = and(
       eq(applications.jobId, jobId),
-      status ? eq(applications.status, status) : undefined,
+      status ? eq(applications.status, status as any) : undefined,
     );
 
+    // Basic Ranking Logic:
+    // 1. Join with candidate (users)
+    // 2. We could join with tags if we had candidate skills, 
+    //    for now we'll rank by: status (SHORTLISTED > PENDING) and recency.
+    
     const [items, [{ total }]] = await Promise.all([
       db
         .select()
         .from(applications)
         .where(where)
-        .orderBy(desc(applications.createdAt))
+        .orderBy(
+          sql`CASE 
+            WHEN ${applications.status} = 'SHORTLISTED' THEN 1 
+            WHEN ${applications.status} = 'PENDING' THEN 2 
+            WHEN ${applications.status} = 'REVIEWING' THEN 3
+            ELSE 4 END`,
+          desc(applications.createdAt)
+        )
         .limit(limit)
         .offset(offset),
       db.select({ total: count() }).from(applications).where(where),
     ]);
 
-    return { items, total: Number(total), page, limit, hasMore: offset + items.length < Number(total) };
+    return { 
+      items, 
+      total: Number(total), 
+      page, 
+      limit, 
+      hasMore: offset + items.length < Number(total) 
+    };
   }
 
   // ── Private helpers ────────────────────────────────────────

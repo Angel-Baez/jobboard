@@ -1,19 +1,20 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Param,
-  Body,
-  ParseIntPipe,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
-import { FilesService } from './files.service';
-import { PresignRequestDto } from './dto/presign-request.dto';
-import { ConfirmUploadDto } from './dto/confirm-upload.dto';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { User } from '@jobboard/db';
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    ParseIntPipe,
+    Post,
+} from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ConfirmUploadDto } from './dto/confirm-upload.dto';
+import { PresignRequestDto } from './dto/presign-request.dto';
+import { FilesService } from './files.service';
 
 @Controller('files')
 export class FilesController {
@@ -24,6 +25,7 @@ export class FilesController {
    * Returns { uploadUrl, storageKey, publicUrl }
    * Client uses uploadUrl to PUT directly to DO Spaces.
    */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('presign')
   presign(@Body() dto: PresignRequestDto, @CurrentUser() user: User) {
     return this.filesService.presign(dto, user);
@@ -34,6 +36,7 @@ export class FilesController {
    * Called after browser PUT to DO Spaces succeeds.
    * Creates DB record and returns the file entity.
    */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('confirm')
   confirmUpload(@Body() dto: ConfirmUploadDto, @CurrentUser() user: User) {
     return this.filesService.confirmUpload(dto, user);

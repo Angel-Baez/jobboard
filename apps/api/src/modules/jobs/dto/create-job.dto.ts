@@ -1,15 +1,49 @@
+import { Field, InputType, Int } from '@nestjs/graphql';
 import {
-  IsString,
-  IsNotEmpty,
-  IsOptional,
-  IsEnum,
-  IsInt,
-  IsArray,
-  MaxLength,
-  Min,
-  ArrayMaxSize,
+    ArrayMaxSize,
+    IsArray,
+    IsEnum,
+    IsInt,
+    IsNotEmpty,
+    IsOptional,
+    IsString,
+    MaxLength,
+    Min,
+    registerDecorator,
+    ValidationArguments,
+    ValidationOptions,
+    ValidatorConstraint,
+    ValidatorConstraintInterface,
 } from 'class-validator';
-import { InputType, Field, Int } from '@nestjs/graphql';
+
+@ValidatorConstraint({ name: 'isSalaryRangeValid', async: false })
+export class IsSalaryRangeValidConstraint implements ValidatorConstraintInterface {
+  validate(value: any, args: ValidationArguments) {
+    const dto = args.object as any;
+    const salaryMin = dto.salaryMin;
+    const salaryMax = dto.salaryMax;
+    if (salaryMin !== undefined && salaryMax !== undefined) {
+      return salaryMin <= salaryMax;
+    }
+    return true;
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return 'salaryMin must be less than or equal to salaryMax';
+  }
+}
+
+export function IsSalaryRangeValid(validationOptions?: ValidationOptions) {
+  return function (object: Object, propertyName: string) {
+    registerDecorator({
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      constraints: [],
+      validator: IsSalaryRangeValidConstraint,
+    });
+  };
+}
 
 const EmploymentType = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP'] as const;
 const WorkMode = ['REMOTE', 'ONSITE', 'HYBRID'] as const;
@@ -63,6 +97,7 @@ export class CreateJobDto {
   @IsInt()
   @Min(0)
   @IsOptional()
+  @IsSalaryRangeValid()
   salaryMax?: number;
 
   @Field(() => String, { nullable: true })
